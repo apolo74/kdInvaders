@@ -170,12 +170,39 @@ function createInvaders() {
     invaders.clear(true, true);
     invaderDirection = 1; // Reset direction when creating new invaders
     
-    for (var y = 0; y < 4; y++) {
-        for (var x = 0; x < 10; x++) {
-            var invader = invaders.create(x * 50 + 100, y * 50 + 50, 'invader1');
-            if (invader && invader.setDisplaySize) {
-                invader.setDisplaySize(40, 30);
-            }
+    const startX = 400; // Center of the screen
+    const startY = 100;
+    const spacingX = 70;
+    const spacingY = 60;
+    
+    // Level-based patterns
+    if (gameState.level === 1) {
+        // Level 1: Easy pattern - 3 lines with 3, 4, 5 invaders
+        createInvaderLine(3, startX - spacingX, startY, spacingX);
+        createInvaderLine(4, startX - spacingX * 1.5, startY + spacingY, spacingX);
+        createInvaderLine(5, startX - spacingX * 2, startY + spacingY * 2, spacingX);
+    } else if (gameState.level === 2) {
+        // Level 2: Medium pattern - 4 lines with 24 invaders
+        for (let i = 0; i < 4; i++) {
+            const count = i < 2 ? 6 : 6; // 6 invaders per line
+            createInvaderLine(count, startX - spacingX * 2.5, startY + i * spacingY, spacingX);
+        }
+    } else {
+        // Level 3+: Hard pattern - Inverted triangle
+        const rows = Math.min(5, 2 + Math.floor(gameState.level / 2)); // Cap at 7 rows max
+        for (let i = 0; i < rows; i++) {
+            const count = rows - i;
+            const offset = i * spacingX / 2;
+            createInvaderLine(count, startX - offset, startY + i * spacingY, spacingX);
+        }
+    }
+}
+
+function createInvaderLine(count, startX, y, spacing) {
+    for (let i = 0; i < count; i++) {
+        const invader = invaders.create(startX + i * spacing, y, 'invader1');
+        if (invader && invader.setDisplaySize) {
+            invader.setDisplaySize(40, 30);
         }
     }
 }
@@ -283,9 +310,29 @@ function updateInvaders() {
 
 function nextLevel() {
     gameState.level++;
-    gameState.invaderSpeed += 10;
+    // Increase speed but cap it at a reasonable maximum
+    gameState.invaderSpeed = Math.min(150, gameState.invaderSpeed + 10);
+    // Slightly increase shooting frequency
+    gameState.invaderShootDelay = Math.max(500, gameState.invaderShootDelay - 100);
+    
     updateScore();
-    createInvaders.call(this);
+    
+    // Get the current scene
+    const scene = game.scene.scenes[0];
+    if (!scene) return;
+    
+    // Create new invaders in the context of the scene
+    createInvaders.call(scene);
+    
+    // Show level up message
+    const levelText = scene.add.text(400, 250, `Level ${gameState.level}`, 
+        { fontSize: '48px', fill: '#00ff00', fontFamily: 'Arial' });
+    levelText.setOrigin(0.5);
+    
+    // Remove the level text after a delay
+    scene.time.delayedCall(1500, function() {
+        levelText.destroy();
+    }, null, scene);
 }
 
 function fireBullet() {

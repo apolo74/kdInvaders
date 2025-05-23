@@ -1,15 +1,33 @@
+// Game configuration
+var gameConfig = {
+    width: 400,  // Narrower for portrait mode
+    height: 600, // Taller for portrait mode
+    backgroundColor: '#000000',
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 0 },
+            debug: false
+        }
+    }
+};
+
 // Game state
 var gameState = {
     score: 0,
     level: 1,
     lives: 3,
     gameOver: false,
+    isPaused: false,
     difficulty: 'normal',
     invaderSpeed: 50,
     invaderDropDistance: 20,
     invaderShootDelay: 2000,
     isMuted: false,
-    audioStarted: false
+    audioStarted: false,
+    config: gameConfig,  // Store config in gameState
+    lastTime: 0,        // For pause functionality
+    accumulatedTime: 0  // For pause functionality
 };
 
 // Audio objects
@@ -38,6 +56,7 @@ var game;
 function toggleMute() {
     gameState.isMuted = !gameState.isMuted;
     const muteBtn = document.getElementById('muteBtn');
+    const muteIcon = document.getElementById('muteIcon');
     
     if (gameState.isMuted) {
         // Mute all sounds
@@ -53,7 +72,8 @@ function toggleMute() {
             sounds.explosion.setVolume(0);
             console.log('Muting explosion sound');
         }
-        muteBtn.textContent = '🔊 Unmute';
+        muteIcon.innerHTML = '&#128266;'; // Speaker icon (muted)
+        muteBtn.setAttribute('aria-label', 'Unmute sound');
         muteBtn.classList.add('muted');
     } else {
         // Unmute all sounds
@@ -69,7 +89,8 @@ function toggleMute() {
             sounds.explosion.setVolume(1);
             console.log('Unmuting explosion sound');
         }
-        muteBtn.textContent = '🔇 Mute';
+        muteIcon.innerHTML = '&#128264;'; // Speaker icon (unmuted)
+        muteBtn.setAttribute('aria-label', 'Mute sound');
         muteBtn.classList.remove('muted');
     }
     
@@ -80,19 +101,65 @@ function toggleMute() {
     }
 }
 
+// Toggle pause state
+function togglePause() {
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    
+    if (gameState.gameOver) return;
+    
+    gameState.isPaused = !gameState.isPaused;
+    
+    if (gameState.isPaused) {
+        // Pause the game
+        if (sounds.backgroundMusic && sounds.backgroundMusic.isPlaying) {
+            sounds.backgroundMusic.pause();
+        }
+        playPauseBtn.textContent = 'Play';
+        playPauseBtn.style.backgroundColor = '#4CAF50'; // Green when play is available
+    } else {
+        // Resume the game
+        if (sounds.backgroundMusic && !sounds.backgroundMusic.isPlaying && !gameState.isMuted) {
+            sounds.backgroundMusic.play();
+        }
+        playPauseBtn.textContent = 'Pause';
+        playPauseBtn.style.backgroundColor = '#FF9800'; // Orange when pause is available
+    }
+}
+
 // Wait for the DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM fully loaded, initializing game...');
     
     // Set up UI event listeners
-    document.getElementById('restartBtn').addEventListener('click', restartGame);
-    document.getElementById('muteBtn').addEventListener('click', toggleMute);
-    document.getElementById('difficulty').addEventListener('change', function(e) {
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const muteBtn = document.getElementById('muteBtn');
+    const muteIcon = document.getElementById('muteIcon');
+    const difficultySelect = document.getElementById('difficulty');
+    
+    // Set initial mute button state
+    muteIcon.innerHTML = gameState.isMuted ? '&#128266;' : '&#128264;';
+    muteBtn.setAttribute('aria-label', gameState.isMuted ? 'Unmute sound' : 'Mute sound');
+    if (gameState.isMuted) {
+        muteBtn.classList.add('muted');
+    }
+    
+    playPauseBtn.addEventListener('click', togglePause);
+    restartBtn.addEventListener('click', restartGame);
+    muteBtn.addEventListener('click', toggleMute);
+    difficultySelect.addEventListener('change', function(e) {
+        if (!gameState.isPaused && !gameState.gameOver) {
+            togglePause(); // Pause the game when changing difficulty
+        }
         gameState.difficulty = e.target.value;
         updateDifficulty();
     });
     
+    // Initialize the game
     initGame();
+    
+    // Start with the game paused
+    togglePause();
 });
 
 function initGame() {
@@ -111,19 +178,14 @@ function initGame() {
         game.destroy(true);
     }
     
-    var config = {
+    // Create Phaser game configuration
+    var phaserConfig = {
         type: Phaser.AUTO,
         parent: 'game-container',
-        width: 800,
-        height: 600,
-        backgroundColor: '#000000',
-        physics: {
-            default: 'arcade',
-            arcade: {
-                gravity: { y: 0 },
-                debug: false
-            }
-        },
+        width: gameConfig.width,
+        height: gameConfig.height,
+        backgroundColor: gameConfig.backgroundColor,
+        physics: gameConfig.physics,
         scene: {
             preload: preload,
             create: create,
@@ -131,7 +193,8 @@ function initGame() {
         }
     };
     
-    game = new Phaser.Game(config);
+    // Initialize the game
+    game = new Phaser.Game(phaserConfig);
 }
 
 function updateDifficulty() {
@@ -161,25 +224,69 @@ function updateScore() {
 }
 
 function restartGame() {
-    // Stop any playing sounds
-    if (sounds.backgroundMusic) {
-        sounds.backgroundMusic.stop();
+    // Reset game state and restart
+    if (game) {
+        game.destroy(true);
     }
+    // Reset pause state
+    gameState.isPaused = false;
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    playPauseBtn.textContent = 'Pause';
+    playPauseBtn.style.backgroundColor = '#FF9800';
     
     initGame();
 }
 
 function gameOver() {
     gameState.gameOver = true;
-    gameOverText = game.scene.scenes[0].add.text(400, 300, 'GAME OVER', 
-        { fontSize: '64px', fill: '#ff0000' }).setOrigin(0.5);
-    gameOverText.setScrollFactor(0);
+    const centerX = gameState.config.width / 2;
+    const centerY = gameState.config.height / 2;
+    
+    // Create a semi-transparent background for better visibility
+    const bg = game.scene.scenes[0].add.rectangle(centerX, centerY, 300, 120, 0x000000, 0.7)
+        .setOrigin(0.5);
+    
+    // Create the game over text with better styling
+    gameOverText = game.scene.scenes[0].add.text(centerX, centerY - 15, 'GAME OVER', {
+        fontSize: '40px',
+        fill: '#ff0000',
+        fontStyle: 'bold',
+        stroke: '#ffffff',
+        strokeThickness: 3
+    }).setOrigin(0.5);
+    
+    // Add a restart prompt
+    const restartText = game.scene.scenes[0].add.text(centerX, centerY + 30, 'Click to Restart', {
+        fontSize: '20px',
+        fill: '#ffffff'
+    }).setOrigin(0.5);
+    
+    // Make the text interactive
+    restartText.setInteractive();
+    restartText.on('pointerdown', function() {
+        restartGame();
+    });
+    
+    // Add hover effect
+    restartText.on('pointerover', () => restartText.setStyle({ fill: '#ff9999' }));
+    restartText.on('pointerout', () => restartText.setStyle({ fill: '#ffffff' }));
+    
+    // Add to a container for easier management
+    gameOverContainer = game.scene.scenes[0].add.container(0, 0, [bg, gameOverText, restartText]);
+    gameOverContainer.setScrollFactor(0);
+    
+    // Add click/tap to restart
+    game.scene.scenes[0].input.on('pointerdown', function() {
+        if (gameState.gameOver) {
+            restartGame();
+        }
+    });
 }
 
 function preload() {
     // Load assets
     this.load.image('player', 'assets/player.png');
-    this.load.image('invader1', 'assets/invader1.png');
+    this.load.image('invader1', 'assets/invader.png');
     this.load.image('bullet', 'assets/bullet.png');
     this.load.image('background', 'assets/background.png');
     
@@ -210,6 +317,37 @@ function preload() {
     });
 }
 
+function createInvaders() {
+    // Clear any existing invaders
+    invaders.clear(true, true);
+    
+    const centerX = gameState.config.width / 2;
+    const startY = 80;  // Start higher up in portrait mode
+    const spacingX = 45; // Tighter horizontal spacing
+    const spacingY = 50; // Tighter vertical spacing
+    const maxWidth = gameState.config.width - 40; // Max width for invaders
+    
+    // Level-based patterns adjusted for portrait
+    if (gameState.level === 1) {
+        // Level 1: 2 columns of 5 invaders
+        createInvaderLine(5, centerX - spacingX/2, startY, 0, spacingY);
+        createInvaderLine(5, centerX + spacingX/2, startY, 0, spacingY);
+    } else if (gameState.level === 2) {
+        // Level 2: 3 columns of 4 invaders
+        for (let i = 0; i < 3; i++) {
+            createInvaderLine(4, centerX - spacingX + (i * spacingX), startY, 0, spacingY);
+        }
+    } else {
+        // Level 3+: Diamond pattern
+        const rows = 3 + Math.min(2, Math.floor(gameState.level / 2));
+        for (let i = 0; i < rows; i++) {
+            const count = i < Math.ceil(rows/2) ? i + 1 : rows - i;
+            const offset = (Math.ceil(rows/2) - count) * spacingX / 2;
+            createInvaderLine(count, centerX - offset, startY + i * spacingY, spacingX, spacingY);
+        }
+    }
+}
+
 function create() {
     // Reset game state if needed
     if (gameState.gameOver) {
@@ -217,11 +355,11 @@ function create() {
         if (gameOverText) gameOverText.destroy();
     }
     
-    // Background
-    this.add.image(400, 300, 'background').setDisplaySize(800, 600);
+    // Background - using the new portrait background
+    this.add.image(gameState.config.width/2, gameState.config.height/2, 'background').setDisplaySize(gameState.config.width, gameState.config.height);
 
-    // Player
-    player = this.physics.add.sprite(400, 550, 'player').setDisplaySize(50, 30);
+    // Player - position at bottom center
+    player = this.physics.add.sprite(gameState.config.width/2, gameState.config.height - 50, 'player').setDisplaySize(40, 25);
     player.setCollideWorldBounds(true);
     cursors = this.input.keyboard.createCursorKeys();
     
@@ -250,103 +388,67 @@ function create() {
     updateScore();
     
     // Initialize audio objects
-    sounds.backgroundMusic = this.sound.add('backgroundMusic', { 
-        loop: true, 
-        volume: 0.3,
-        mute: false
-    });
-    
-    sounds.shoot = this.sound.add('shoot', { 
-        volume: 1,
-        mute: false
-    });
-    
-    sounds.explosion = this.sound.add('explosion', { 
-        volume: 1,
-        mute: false
-    });
-    
-    console.log('Audio objects created');
-    
-    // Function to start audio playback
-    const startAudioPlayback = () => {
-        if (gameState.audioStarted) return;
+    try {
+        sounds.backgroundMusic = this.sound.add('backgroundMusic', { 
+            loop: true, 
+            volume: gameState.isMuted ? 0 : 0.3,
+            mute: gameState.isMuted
+        });
         
-        console.log('Starting audio playback...');
-        gameState.audioStarted = true;
+        sounds.shoot = this.sound.add('shoot', { 
+            volume: gameState.isMuted ? 0 : 1,
+            mute: gameState.isMuted
+        });
         
-        // Try to play a sound effect first to unlock audio context
-        sounds.shoot.play({ volume: 0 })
-            .then(() => {
-                console.log('Audio context unlocked');
-                // Now play background music if not muted
-                if (!gameState.isMuted && sounds.backgroundMusic) {
-                    console.log('Playing background music');
-                    return sounds.backgroundMusic.play();
-                }
-            })
-            .then(() => console.log('Background music started successfully'))
-            .catch(error => console.error('Error starting audio:', error));
-    };
-    
-    // Add click/tap handler to start audio on first user interaction
-    const startOnInteraction = () => {
-        console.log('User interaction detected, starting audio...');
-        startAudioPlayback();
-    };
-    
-    // Add multiple ways to start audio
-    this.input.once('pointerdown', startOnInteraction);
-    this.input.keyboard.once('keydown', startOnInteraction);
-    this.game.canvas.addEventListener('click', startOnInteraction, { once: true });
-    this.game.canvas.addEventListener('touchstart', startOnInteraction, { once: true });
-    
-    console.log('Audio system initialized - waiting for user interaction');
-}
-
-function createInvaders() {
-    invaders.clear(true, true);
-    invaderDirection = 1; // Reset direction when creating new invaders
-    
-    const startX = 400; // Center of the screen
-    const startY = 100;
-    const spacingX = 70;
-    const spacingY = 60;
-    
-    // Level-based patterns
-    if (gameState.level === 1) {
-        // Level 1: Easy pattern - 3 lines with 3, 4, 5 invaders
-        createInvaderLine(3, startX - spacingX, startY, spacingX);
-        createInvaderLine(4, startX - spacingX * 1.5, startY + spacingY, spacingX);
-        createInvaderLine(5, startX - spacingX * 2, startY + spacingY * 2, spacingX);
-    } else if (gameState.level === 2) {
-        // Level 2: Medium pattern - 4 lines with 24 invaders
-        for (let i = 0; i < 4; i++) {
-            const count = i < 2 ? 6 : 6; // 6 invaders per line
-            createInvaderLine(count, startX - spacingX * 2.5, startY + i * spacingY, spacingX);
+        sounds.explosion = this.sound.add('explosion', { 
+            volume: gameState.isMuted ? 0 : 1,
+            mute: gameState.isMuted
+        });
+        
+        // Start background music if not muted
+        if (!gameState.isMuted && sounds.backgroundMusic) {
+            sounds.backgroundMusic.play()
+                .catch(function(error) {
+                    console.error('Error playing background music:', error);
+                });
         }
-    } else {
-        // Level 3+: Hard pattern - Inverted triangle
-        const rows = Math.min(5, 2 + Math.floor(gameState.level / 2)); // Cap at 7 rows max
-        for (let i = 0; i < rows; i++) {
-            const count = rows - i;
-            const offset = i * spacingX / 2;
-            createInvaderLine(count, startX - offset, startY + i * spacingY, spacingX);
-        }
+    } catch (error) {
+        console.error('Error initializing audio:', error);
     }
+    
+    // Reset invader direction
+    invaderDirection = 1;
 }
 
-function createInvaderLine(count, startX, y, spacing) {
+function createInvaderLine(count, startX, startY, spacingX, spacingY) {
     for (let i = 0; i < count; i++) {
-        const invader = invaders.create(startX + i * spacing, y, 'invader1');
+        const x = spacingX ? startX + i * spacingX : startX;
+        const y = spacingY ? startY + i * spacingY : startY;
+        const invader = invaders.create(x, y, 'invader1');
         if (invader && invader.setDisplaySize) {
-            invader.setDisplaySize(40, 30);
+            invader.setDisplaySize(30, 25); // Smaller invaders for portrait
         }
     }
 }
 
-function update() {
-    if (!gameState || gameState.gameOver) return;
+function update(time) {
+    if (gameState.gameOver || gameState.isPaused) {
+        // Handle paused state
+        if (gameState.isPaused) {
+            // Store the current time for when we unpause
+            if (!gameState.lastTime) {
+                gameState.lastTime = time;
+            } else {
+                gameState.accumulatedTime += time - gameState.lastTime;
+                gameState.lastTime = time;
+            }
+            return;
+        }
+        return;
+    }
+    
+    // Reset the last time when unpausing
+    gameState.lastTime = 0;
     
     // Initialize player movement if not already set
     if (player && player.body) {
@@ -387,6 +489,11 @@ function update() {
 function updateInvaders() {
     if (gameState.gameOver) return;
     
+    const config = gameState.config;
+    const invaderWidth = 30; // Width of invader sprite
+    const invaderHeight = 25; // Height of invader sprite
+    const padding = 20; // Padding from screen edges
+    
     var hitEdge = false;
     var invadersAlive = invaders.getChildren().length > 0;
     
@@ -397,14 +504,14 @@ function updateInvaders() {
         // Move invader
         invader.x += gameState.invaderSpeed * 0.05 * invaderDirection;
         
-        // Check if invader hit the edge
-        if ((invader.x <= 30 && invaderDirection < 0) || 
-            (invader.x >= 770 && invaderDirection > 0)) {
+        // Check if invader hit the edge using game config
+        if ((invader.x <= padding && invaderDirection < 0) || 
+            (invader.x >= config.width - padding - invaderWidth && invaderDirection > 0)) {
             hitEdge = true;
         }
         
-        // Check if invaders reached the bottom
-        if (invader.y > 500) {
+        // Check if invaders reached the bottom (leaving space for UI)
+        if (invader.y > config.height - 100) {
             gameOver();
             return;
         }
@@ -462,14 +569,48 @@ function nextLevel() {
     // Create new invaders in the context of the scene
     createInvaders.call(scene);
     
-    // Show level up message
-    const levelText = scene.add.text(400, 250, `Level ${gameState.level}`, 
-        { fontSize: '48px', fill: '#00ff00', fontFamily: 'Arial' });
-    levelText.setOrigin(0.5);
+    // Calculate center position
+    const centerX = gameState.config.width / 2;
+    const centerY = gameState.config.height / 2;
     
-    // Remove the level text after a delay
+    // Create a semi-transparent background for better visibility
+    const bg = scene.add.rectangle(centerX, centerY, 250, 100, 0x000000, 0.7)
+        .setOrigin(0.5);
+    
+    // Show level up message with better styling
+    const levelText = scene.add.text(centerX, centerY - 10, `LEVEL ${gameState.level}`, {
+        fontSize: '36px',
+        fill: '#00ff00',
+        fontStyle: 'bold',
+        stroke: '#ffffff',
+        strokeThickness: 2,
+        fontFamily: 'Arial, sans-serif'
+    }).setOrigin(0.5);
+    
+    // Create a container for the level up message
+    const levelContainer = scene.add.container(0, 0, [bg, levelText]);
+    levelContainer.setScrollFactor(0);
+    
+    // Add a tween for a nice entrance effect
+    levelContainer.setScale(0.5);
+    scene.tweens.add({
+        targets: levelContainer,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 500,
+        ease: 'Back.out'
+    });
+    
+    // Remove the level container after a delay
     scene.time.delayedCall(1500, function() {
-        levelText.destroy();
+        scene.tweens.add({
+            targets: levelContainer,
+            alpha: 0,
+            duration: 500,
+            onComplete: function() {
+                levelContainer.destroy();
+            }
+        });
     }, null, scene);
 }
 

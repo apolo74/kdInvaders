@@ -1,23 +1,36 @@
-var config = {
-    type: Phaser.AUTO,
-    width: 800,
-    height: 600,
-    backgroundColor: '#000000',
-    physics: {
-        default: 'arcade',
-        arcade: {
-            gravity: { y: 0 },
-            debug: false
+// Wait for the DOM to be fully loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM fully loaded, initializing game...');
+    
+    var config = {
+        type: Phaser.AUTO,
+        parent: 'game-container',
+        width: 800,
+        height: 600,
+        backgroundColor: '#000000',
+        physics: {
+            default: 'arcade',
+            arcade: {
+                gravity: { y: 0 },
+                debug: false
+            }
+        },
+        scene: {
+            preload: preload,
+            create: create,
+            update: update
         }
-    },
-    scene: {
-        preload: preload,
-        create: create,
-        update: update
-    }
-};
+    };
 
-var game = new Phaser.Game(config);
+    // Initialize the game
+    try {
+        var game = new Phaser.Game(config);
+        console.log('Game initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize game:', error);
+        alert('Failed to initialize the game. Please check the console for errors.');
+    }
+});
 
 var player;
 var invaders;

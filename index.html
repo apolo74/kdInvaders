@@ -1,26 +1,85 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Modern Space Invaders</title>
+    <title>Space Invaders</title>
     <style>
         body { 
             margin: 0;
-            padding: 0;
+            padding: 20px;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
             min-height: 100vh;
-            background: #000;
-            overflow: hidden;
+            background: #0a0a2a;
+            color: #fff;
+            font-family: Arial, sans-serif;
         }
         #game-container {
-            border: 2px solid #333;
+            margin: 20px 0;
+            position: relative;
+        }
+        #ui-overlay {
+            width: 800px;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        #score-container {
+            font-size: 20px;
+        }
+        #controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        select {
+            padding: 8px;
+            border-radius: 4px;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+        }
+        .game-title {
+            font-size: 2.5em;
+            margin: 0;
+            color: #4CAF50;
+            text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
         }
     </style>
 </head>
 <body>
+    <h1 class="game-title">Space Invaders</h1>
+    
+    <div id="ui-overlay">
+        <div id="score-container">Score: <span id="score">0</span></div>
+        <div>Level: <span id="level">1</span></div>
+        <div>Lives: <span id="lives">3</span></div>
+    </div>
+    
     <div id="game-container">
         <!-- Phaser will create a canvas here -->
+    </div>
+    
+    <div id="controls">
+        <button id="restartBtn">Restart Game</button>
+        <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="normal" selected>Normal</option>
+            <option value="hard">Hard</option>
+        </select>
     </div>
     
     <!-- Load Phaser from CDN with HTTPS -->

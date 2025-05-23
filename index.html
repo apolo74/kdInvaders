@@ -45,6 +45,12 @@
         button:hover {
             background: #45a049;
         }
+        .sound-btn {
+            background: #555;
+        }
+        .sound-btn.muted {
+            background: #f44336;
+        }
         select {
             padding: 8px;
             border-radius: 4px;
@@ -80,6 +86,7 @@
             <option value="normal" selected>Normal</option>
             <option value="hard">Hard</option>
         </select>
+        <button id="muteBtn" class="sound-btn">🔇 Mute</button>
     </div>
     
     <!-- Load Phaser from CDN with HTTPS -->

@@ -7,7 +7,16 @@ var gameState = {
     difficulty: 'normal',
     invaderSpeed: 50,
     invaderDropDistance: 20,
-    invaderShootDelay: 2000
+    invaderShootDelay: 2000,
+    isMuted: false,
+    audioStarted: false
+};
+
+// Audio objects
+var sounds = {
+    backgroundMusic: null,
+    shoot: null,
+    explosion: null
 };
 
 // Game objects
@@ -25,12 +34,59 @@ var lastInvaderShoot = 0;
 var lastShot = 0;
 var game;
 
+// Toggle mute state
+function toggleMute() {
+    gameState.isMuted = !gameState.isMuted;
+    const muteBtn = document.getElementById('muteBtn');
+    
+    if (gameState.isMuted) {
+        // Mute all sounds
+        if (sounds.backgroundMusic) {
+            sounds.backgroundMusic.setVolume(0);
+            console.log('Muting background music');
+        }
+        if (sounds.shoot) {
+            sounds.shoot.setVolume(0);
+            console.log('Muting shoot sound');
+        }
+        if (sounds.explosion) {
+            sounds.explosion.setVolume(0);
+            console.log('Muting explosion sound');
+        }
+        muteBtn.textContent = '🔊 Unmute';
+        muteBtn.classList.add('muted');
+    } else {
+        // Unmute all sounds
+        if (sounds.backgroundMusic) {
+            sounds.backgroundMusic.setVolume(0.3); // Lower volume for background music
+            console.log('Unmuting background music');
+        }
+        if (sounds.shoot) {
+            sounds.shoot.setVolume(1);
+            console.log('Unmuting shoot sound');
+        }
+        if (sounds.explosion) {
+            sounds.explosion.setVolume(1);
+            console.log('Unmuting explosion sound');
+        }
+        muteBtn.textContent = '🔇 Mute';
+        muteBtn.classList.remove('muted');
+    }
+    
+    // If we're unmuting and background music isn't playing, start it
+    if (!gameState.isMuted && sounds.backgroundMusic && !sounds.backgroundMusic.isPlaying) {
+        console.log('Starting background music playback');
+        sounds.backgroundMusic.play();
+    }
+}
+
 // Wait for the DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM fully loaded, initializing game...');
     
     // Set up UI event listeners
     document.getElementById('restartBtn').addEventListener('click', restartGame);
+    document.getElementById('muteBtn').addEventListener('click', toggleMute);
     document.getElementById('difficulty').addEventListener('change', function(e) {
         gameState.difficulty = e.target.value;
         updateDifficulty();
@@ -105,6 +161,11 @@ function updateScore() {
 }
 
 function restartGame() {
+    // Stop any playing sounds
+    if (sounds.backgroundMusic) {
+        sounds.backgroundMusic.stop();
+    }
+    
     initGame();
 }
 
@@ -124,6 +185,29 @@ function preload() {
     
     // Load bullet for invaders
     this.load.image('enemyBullet', 'assets/bullet.png');
+    
+    // Load audio files with multiple formats for better browser compatibility
+    this.load.audio('backgroundMusic', [
+        'assets/audio/galactic_stand_off.mp3',
+        'assets/audio/galactic_stand_off.ogg'  // Fallback format
+    ]);
+    this.load.audio('shoot', [
+        'assets/audio/shoot.mp3',
+        'assets/audio/shoot.ogg'  // Fallback format
+    ]);
+    this.load.audio('explosion', [
+        'assets/audio/explosion.mp3',
+        'assets/audio/explosion.ogg'  // Fallback format
+    ]);
+    
+    // Show loading progress
+    this.load.on('progress', function (value) {
+        console.log('Loading: ' + (value * 100) + '%');
+    });
+    
+    this.load.on('complete', function () {
+        console.log('All assets loaded');
+    });
 }
 
 function create() {
@@ -164,6 +248,60 @@ function create() {
     
     // Initialize UI
     updateScore();
+    
+    // Initialize audio objects
+    sounds.backgroundMusic = this.sound.add('backgroundMusic', { 
+        loop: true, 
+        volume: 0.3,
+        mute: false
+    });
+    
+    sounds.shoot = this.sound.add('shoot', { 
+        volume: 1,
+        mute: false
+    });
+    
+    sounds.explosion = this.sound.add('explosion', { 
+        volume: 1,
+        mute: false
+    });
+    
+    console.log('Audio objects created');
+    
+    // Function to start audio playback
+    const startAudioPlayback = () => {
+        if (gameState.audioStarted) return;
+        
+        console.log('Starting audio playback...');
+        gameState.audioStarted = true;
+        
+        // Try to play a sound effect first to unlock audio context
+        sounds.shoot.play({ volume: 0 })
+            .then(() => {
+                console.log('Audio context unlocked');
+                // Now play background music if not muted
+                if (!gameState.isMuted && sounds.backgroundMusic) {
+                    console.log('Playing background music');
+                    return sounds.backgroundMusic.play();
+                }
+            })
+            .then(() => console.log('Background music started successfully'))
+            .catch(error => console.error('Error starting audio:', error));
+    };
+    
+    // Add click/tap handler to start audio on first user interaction
+    const startOnInteraction = () => {
+        console.log('User interaction detected, starting audio...');
+        startAudioPlayback();
+    };
+    
+    // Add multiple ways to start audio
+    this.input.once('pointerdown', startOnInteraction);
+    this.input.keyboard.once('keydown', startOnInteraction);
+    this.game.canvas.addEventListener('click', startOnInteraction, { once: true });
+    this.game.canvas.addEventListener('touchstart', startOnInteraction, { once: true });
+    
+    console.log('Audio system initialized - waiting for user interaction');
 }
 
 function createInvaders() {
@@ -272,7 +410,7 @@ function updateInvaders() {
         }
     });
     
-        // Change direction if hit edge
+    // Change direction if hit edge
     if (hitEdge) {
         invaderDirection *= -1;
         var movedDown = false;
@@ -339,6 +477,12 @@ function fireBullet() {
     if (this.time.now > lastShot + 500) { // Limit firing rate
         var bullet = playerBullets.create(player.x, player.y - 20, 'bullet');
         bullet.setVelocityY(-500);
+        
+        // Play shoot sound if not muted
+        if (!gameState.isMuted && sounds.shoot) {
+            sounds.shoot.play();
+        }
+        
         lastShot = this.time.now;
     }
 }
@@ -357,6 +501,11 @@ function hitInvader(bullet, invader) {
     bullet.destroy();
     invader.destroy();
     
+    // Play explosion sound if not muted
+    if (!gameState.isMuted && sounds.explosion) {
+        sounds.explosion.play();
+    }
+    
     // Update score
     gameState.score += 10 * gameState.level;
     updateScore();
@@ -366,6 +515,11 @@ function hitPlayer(player, bullet) {
     if (!player || !bullet || !player.active || !bullet.active) return;
     
     bullet.destroy();
+    
+    // Play explosion sound if not muted
+    if (!gameState.isMuted && sounds.explosion) {
+        sounds.explosion.play();
+    }
     
     if (gameState) {
         gameState.lives--;
